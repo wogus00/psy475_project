@@ -14,6 +14,8 @@ WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 BUTTON_COLOR = (100, 100, 255)
 BUTTON_HOVER = (150, 150, 255)
+GREEN = (0, 255, 0)  # New color for "no keypress" scenario
+
 
 # Define positions
 left_pos = (150, 200)
@@ -72,6 +74,7 @@ def show_start_screen():
 def run_game():
     """Main game function for 10 trials."""
     success_count = 0
+    fail_count = 0
     trial_count = 0
     response_times = {"congruent": [], "incongruent": []}
     running = True
@@ -81,7 +84,7 @@ def run_game():
         screen.fill(WHITE)
         
         # Determine random color and position
-        color = random.choice([RED, BLUE])
+        color = random.choice([RED, BLUE, GREEN])
         position = random.choice([left_pos, right_pos])
         
         # Determine congruency
@@ -94,6 +97,11 @@ def run_game():
         else:
             trial_text = font.render(f"Trial {trial_count - 2}", True, BLACK)
         screen.blit(trial_text, (250, 50))
+        
+        # Display current score at the bottom
+        score_text = font.render(f"Current Score: {success_count}", True, BLACK)
+        screen.blit(score_text, (250, 700))  # Display the score at the bottom
+
         pygame.display.flip()
         
         # Record start time
@@ -105,6 +113,7 @@ def run_game():
         
         # Wait for input
         waiting = True
+        green_success = False
         while waiting:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -113,17 +122,43 @@ def run_game():
                 elif event.type == pygame.KEYDOWN:
                     # Calculate response time
                     response_time = time.time() - start_time
-                    # Check if response is correct and within the time limit
-                    if ((color == RED and event.key == pygame.K_f) or (color == BLUE and event.key == pygame.K_j)) and response_time <= response_time_limit:
-                        outcome = "Success"
+                    
+                    # If the color is GREEN, any key press is incorrect
+                    if color == GREEN:
+                        outcome = "Fail: wrong button, no press required!"
                         if trial_count > 2:
-                            success_count += 1
+                            fail_count += 1  # Decrement on fail
+                    else:
+                        # Check if response is correct and within the time limit
+                        if ((color == RED and event.key == pygame.K_f) or (color == BLUE and event.key == pygame.K_j)) and response_time <= response_time_limit:
+                            outcome = "Success"
+                            if trial_count > 2:
+                                success_count += 1
+                        else:
+                            outcome = "Fail: wrong button!"
+                            if trial_count > 2:
+                                fail_count += 1  # Decrement on fail
+                    
+                    # Ensure success count doesn't go below 0
+                    success_count = max(0, success_count)
                     
                     waiting = False
-            # Fail if response time exceeds the limit
-            if time.time() - start_time > response_time_limit:
+            
+            # Handle green case: if 1 second passes and no key is pressed, mark as success
+            if color == GREEN and time.time() - start_time > 1:
+                outcome = "Success"
+                green_success = True
+                if trial_count > 2:
+                    success_count += 1  # Increment success count
+                waiting = False
+            
+            # Fail if response time exceeds the limit (for RED or BLUE only)
+            if time.time() - start_time > response_time_limit and color != GREEN:
                 waiting = False
                 outcome = f"Fail: too slow!"
+                if trial_count > 2:
+                    fail_count += 1  
+
         # Show outcome (Success/Fail) with a blank screen
         screen.fill(WHITE)
         outcome_text = font.render(f"{outcome}!", True, BLACK)
@@ -132,7 +167,8 @@ def run_game():
         trial_count += 1
         pygame.time.delay(feedback_delay)  # 2-second delay before next trial
 
-    return success_count
+    return success_count, fail_count
+
 
 def main():
     # Show the start screen first
@@ -141,14 +177,14 @@ def main():
 
     while True:
         # Run the game and get success count
-        success_count = run_game()
+        success_count, fail_count = run_game()
 
         # Display results and buttons for restart/quit
         while True:
             screen.fill(WHITE)
             
             # Display total success count
-            result_text = font.render(f"Total successful responses: {success_count} out of 10 trials", True, BLACK)
+            result_text = font.render(f"Total successes: {success_count}, Total failures: {fail_count}", True, BLACK)
             screen.blit(result_text, (60, 100))
             
             # Define button areas
